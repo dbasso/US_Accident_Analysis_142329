@@ -5,6 +5,8 @@ date: "02/08/2020"
 output: html_document
 ---
 
+#TODO: RIPULIRE I GRAFICI PER LA PRESENTAZIONE
+
 ```{r}
 library(tidyr)
 library(dplyr)
