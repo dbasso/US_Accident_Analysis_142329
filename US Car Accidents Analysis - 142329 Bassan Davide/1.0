@@ -1,0 +1,502 @@
+---
+title: 'USA Accidents'
+author: "Davide Bassan"
+date: "02/08/2020"
+output: html_document
+---
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+
+```
+
+```{r}
+US_Accidents <- read.csv("C:/Users/dbass/Downloads/199387_1319582_bundle_archive/US_Accidents_June20.csv")
+
+US_Accidents <- as_tibble(US_Accidents)
+
+view(US_Accidents)
+```
+
+
+<h3>Tidy the data...</h3>
+
+Come primo passaggio, ho notato che tutta la colonna <b>Turning_Loop</b> ha il valore <u>FALSE</u> e che tutta la colonna <b>Country</b> ha il valore <u>USA</u>.  ho provveduto così a cancellarle.
+```{r}
+distinct(US_Accidents, Turning_Loop)
+distinct(US_Accidents, Country)
+US_Accidents <- select(US_Accidents, -Turning_Loop & -Country)
+
+head(US_Accidents)
+```
+
+
+<h3>Data...were are you from?</h3>
+
+Ho notato che i dati non sono stati catturati da una sola API, bensì con 3 API differenti 
+```{r}
+distinct(US_Accidents, Source)
+
+```
+
+Ho così plottato queste tre sorgenti in un grafico (prima a barre e poi a torta)
+
+```{r}
+source_count <- 
+  US_Accidents %>%
+  group_by(Source) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+source_bar <- ggplot(source_count, aes(x=Source, y=count, fill=Source)) +
+              geom_bar(width=1,stat="identity")
+            
+percent_labels <- round(100*(source_count$count)/sum(source_count$count),1)
+
+pielables<- paste(percent_labels, "%", sep="")
+
+
+source_pie <- ggplot(source_count, aes(x = "", y=count, fill = Source)) + 
+  geom_bar(width=1,stat ="identity", color= "white") + 
+  coord_polar("y", start = 0, direction = 1) +
+  theme_void() +
+  geom_text(aes(x=1, y=cumsum(count) - count/3), label = pielables)
+source_pie 
+```
+
+Il risultato è che l'API che ha portato più informazioni al dataset con (68.7%) è MapQuest, seguito da Bing (29.5). Solo l'1.8% delle osservazioni invece sono provenienti da entrambe le API
+
+
+<h3> Accidents in USA, take a look </h3>
+
+Una colonna molto interessante nel dataset è <b>Severity</b> che fornisce una stima della gravità dell'incidente in una scala da 1 (poco grave) a 4 (molto grave). Mi sono chiesto, in america quanti incidenti ci sono per ogni grado di serietà?
+```{r}
+severity_count <- 
+  US_Accidents %>%
+  group_by(Severity) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_count
+
+
+severity_bar <- ggplot(severity_count, aes(x=reorder(Severity, -count), y=count, fill=factor(Severity))) +
+                         geom_bar(width=1,stat="identity")
+                       
+                       
+severity_bar
+```
+Il risultato è che negli Stati Uniti il più comune incidente ha <b>Severity = 2</b>, seguito da incidenti di gravezza 3. Ora calcolo ne calcolo la media
+
+```{r}
+mean_severity <- mean(US_Accidents$Severity)
+print(mean_severity)
+```
+Il risultato è quindi che in media un incidente negli stati uniti avvenuto nell'intervallo di tempo da 08/02/2016 al 30/06/2020 ha gravità <b>2.339929</b>.
+
+
+Ora ho deciso di analizzare singolarmente ogni scala di gravità, scoprendo con quale gravità e in quali stati degli USA accadessero gli incidenti più frequenti (catalogati per Severity).
+```{r}
+severity_count <- 
+  US_Accidents %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+severity_count_1 <-
+  US_Accidents %>%
+  filter(Severity == 1) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_count_2 <-
+  US_Accidents %>%
+  filter(Severity == 2) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_count_3 <-
+  US_Accidents %>%
+  filter(Severity == 3) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_count_4 <-
+  US_Accidents %>%
+  filter(Severity == 4) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_count
+severity_count_1
+severity_count_2
+severity_count_3
+severity_count_4
+
+severity_bar <- 
+  severity_count %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+severity_bar_1 <- 
+  severity_count_1 %>%
+  arrange(desc(count)) %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+severity_bar_2 <- 
+  severity_count_2 %>%
+  arrange(desc(count)) %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+severity_bar_3 <- 
+  severity_count_3 %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+severity_bar_4 <- 
+  severity_count_4 %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+
+severity_bar
+severity_bar_1
+severity_bar_2
+severity_bar_3
+severity_bar_4
+```
+Ne risulta che in generale lo stato con più incidenti è di gran lunga la California (<b>816824</b>), seguito da Texas (<b>329284</b>) e Florida (<b>258002</b>).
+
+<h6>Severity 1</h6>
+Per quanto riguarda la gravezza 1, risulta che lo stato con maggior numero di incidenti è l'Arizona (<b>6705</b>), seguito dalla California (<b>5801</b>) e dalla Florida (<b>3014</b>).
+
+<h6>Severity 2</h6>
+Con rilevalza 2, risulta che lo stato con maggior numero di incidenti è la Calfornia (<b>576742</b>), seguito dal Texas (<b>233840</b>) e dalla Florida (<b>165506</b>).
+
+<h6>Severity 3</h6>
+Con serietà 3, risulta che lo stato con maggior numero di incidenti è la Calfornia (<b>225820</b>), seguito dal Texas (<b>89667</b>) e dalla Florida (<b>80563</b>).
+
+<h6>Severity 4</h6>
+Con serietà 4, risulta che lo stato con maggior numero di incidenti è la Florida (<b>8919</b>), seguito dal California (<b>8462</b>) e dalla Georgia (<b>7449</b>).
+
+
+
+A questo punto ho deciso di geolocalizzare su un grafico gli incidenti per la loro gravità.
+```{r}
+usa <- map_data("usa")
+states <- map_data("state")
+
+
+states_map <- ggplot(data = states) + 
+  geom_polygon(aes(x = long, y = lat, group = group), color = "white") + 
+  coord_fixed(1.3) +
+  guides(fill = FALSE)
+
+
+states_map + 
+  geom_point(data = US_Accidents,  mapping = aes(x = Start_Lng, y = Start_Lat, color = factor(Severity)), size = 5-US_Accidents$Severity)
+```
+
+Questo grafico però mi troppo confusionario, allora ho deciso di isolare ogni grado di Severity per analizzarla singolarmente
+
+```{r}
+accidents_sev1 <- subset(US_Accidents, Severity == 1)
+accidents_sev2 <- subset(US_Accidents, Severity == 2)
+accidents_sev3 <- subset(US_Accidents, Severity == 3)
+accidents_sev4 <- subset(US_Accidents, Severity == 4)
+
+states_map + 
+  geom_point(data = accidents_sev1,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1, color = "red")
+
+states_map + 
+  geom_point(data = accidents_sev2,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1, color = "green")
+
+states_map + 
+  geom_point(data = accidents_sev3,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1, color = "blue")
+
+states_map + 
+  geom_point(data = accidents_sev4,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1,color = "red")
+```
+
+
+Ho notato che si formava uno schema stradale abbastanza preciso, mi sono chiesto così quale fosse la strada Americana con più incidenti
+
+```{r}
+accident_street <- 
+  US_Accidents_June20 %>%
+  group_by(Street) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+accident_street
+
+```
+Ed in effetti nella top 10 si presentano dieci "Interstate" 
+
+
+Essendo lo stato con più abitanti mi sono concentrato sulla California
+```{r}
+focus_on_california <- subset(states, region == "california")
+
+california_accidents <- subset(US_Accidents_June20, State == "CA")
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents,  mapping = aes(x = Start_Lng, y = Start_Lat, color = factor(Severity)), size = 1)
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents,  mapping = aes(x = Start_Lng, y = Start_Lat, color = factor(Severity)), size = 1)
+
+
+
+california_accidents_sev1 <- subset(US_Accidents_June20, State == "CA" & Severity == 1)
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents_sev1,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1)
+
+
+
+california_accidents_sev2 <- subset(US_Accidents_June20, State == "CA" & Severity == 2)
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents_sev2,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1)
+
+california_accidents_sev3 <- subset(US_Accidents_June20, State == "CA" & Severity == 3)
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents_sev3,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1)
+
+california_accidents_sev4 <- subset(US_Accidents_June20, State == "CA" & Severity == 4)
+
+ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents_sev4,  mapping = aes(x = Start_Lng, y = Start_Lat), size = 1)
+
+```
+
+Un altra domanda che mi sono posto è stata, con la pioggia si sono verificate più segnalazioni di incidenti?
+```{r}
+corr_rain_sun <-
+  US_Accidents_June20 %>%
+  group_by(Weather_Condition) %>%
+  select(Weather_Condition) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+  
+
+corr_rain_sun
+
+rain_sun_bar <- 
+  corr_rain_sun %>%
+  head() %>%
+  ggplot(aes(x=reorder(Weather_Condition, -count), y=count, fill=Weather_Condition)) +
+              geom_bar(width=1,stat="identity")
+
+rain_sun_bar
+
+```
+E come risultato ho notato che la pioggia non è la causa principalle degli incidenti, infatti ne vengono fatti molti di più quando il meteo segnala bel tempo.
+
+Incerto del risultato ottenuto ho così deciso di scoprire con quale visibilità (in miglie) venivano fatti tali incidenti
+
+```{r}
+visibility <-
+  US_Accidents_June20 %>%
+  group_by(Visibility.mi.) %>%
+  select(Visibility.mi.) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+  
+
+visibility
+
+visibility_bar <- 
+  visibility %>%
+  head() %>%
+  ggplot(aes(x=reorder(Visibility.mi., -count), y=count, fill=factor(Visibility.mi.))) +
+              geom_bar(width=1,stat="identity")
+
+visibility_bar
+
+```
+
+Ed è stato confermato che la stragrande maggioranza degli incidenti vengano fatti in condizioni di visibilità ottimale.
+
+
+Successivamente ho cercato il giorno con più incidenti ed ho cercato di localizzare tali incidenti
+```{r}
+days_accident <-
+  US_Accidents_June20 %>%
+  group_by(substr(US_Accidents_June20$Start_Time, 0, 10)) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+days_accident
+```
+E' risultato come giorno il 4 dicembre 2019, che è stato un Mercoledì, nonchè il "National Cookie Day". Interpretando questo dato come outlier, ho deciso di scoprire dove fossero avvenuti tali incidenti.
+
+```{r}
+day_accident <-
+  US_Accidents_June20 %>%
+  filter(substr(US_Accidents_June20$Start_Time, 0, 10) == "2019-12-04") %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+Risulta che la california in quel giorno ha avuto 2079 incidenti, circa il 42.58% degli incidenti avvenuti negli USA in quel giorno. 
+
+
+Insoddisfatto di tale risultato mi sono chiesto quale fosse il mese con il maggior numero di incidenti.
+
+```{r}
+month_accident <-
+  US_Accidents_June20 %>%
+  group_by(substr(US_Accidents_June20$Start_Time, 0, 7)) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+month_accident
+```
+
+Il risultato è stato che il mese di Ottobre 2019 (106817), il mese di Giugno 2020 (100296) ed il mese di Dicembre 2019 (98281) siano stati i tre mesi con più incidenti negli USA
+
+
+
+Un'altra domanda che mi sono posto è stata:
+Ci sono più incidenti di notte o di giorno
+```{r}
+days_night_civil <-
+  US_Accidents_June20 %>%
+  group_by(Civil_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+days_night_nautical <-
+  US_Accidents_June20 %>%
+  group_by(Nautical_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+days_night_astronomical <-
+  US_Accidents_June20 %>%
+  group_by(Astronomical_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+E' risultato (come avevo previsto) che il maggior numero di incidenti avvenga di giorno, ed a questo punto mi sono chiesto quale fosse la gravità media degli incidenti di notte e di giorno
+```{r}
+days_civil_sev <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Day")
+
+night_civil_sev <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Night")
+
+print(paste("Night: ", mean(night_civil_sev$Severity), " Day: ", mean(days_civil_sev$Severity)))
+
+days_nautical_sev <-
+  US_Accidents_June20 %>%
+  filter(Nautical_Twilight == "Day")
+
+night_nautical_sev <-
+  US_Accidents_June20 %>%
+  filter(Nautical_Twilight == "Night")
+
+print(paste("Night: ", mean(night_nautical_sev$Severity), " Day: ", mean(days_nautical_sev$Severity)))
+
+
+days_astronomical_sev <-
+  US_Accidents_June20 %>%
+  filter(Astronomical_Twilight == "Day")
+
+night_astronomical_sev <-
+  US_Accidents_June20 %>%
+  filter(Astronomical_Twilight == "Night")
+
+print(paste("Night: ", mean(night_astronomical_sev$Severity), " Day: ",mean(days_nautical_sev$Severity)))
+
+```
+E risulta interessante constatare come gli incidenti avvenuti di notte in generale siano lievemente più gravi rispetto a quelli avvenuti di giorno.
+
+
+Guardiamo ora quale codice viene comunicato, maggiormente di notte e di giorno in USA e di notte e di giorno in California
+```{r}
+TMC_usa_global <-
+  US_Accidents_June20 %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_usa_day <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Day") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_usa_night <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Night") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_ca_global <-
+  US_Accidents_June20 %>%
+  filter(State == "CA")  %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_ca_day <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Day" & State == "CA") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_ca_night <-
+  US_Accidents_June20 %>%
+  filter(Civil_Twilight == "Night" & State == "CA") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+```
+
