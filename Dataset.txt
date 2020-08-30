@@ -1,0 +1,2 @@
+A causa delle dimensioni del file sono stato impossibilitato a caricare il dataset,
+il link da Kaggle è https://www.kaggle.com/sobhanmoosavi/us-accidents
