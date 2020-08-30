@@ -16,7 +16,7 @@ library(mapdata)
 ```
 
 ```{r}
-US_Accidents <- read.csv("C:/Users/dbass/Downloads/199387_1319582_bundle_archive/US_Accidents_June20.csv")
+US_Accidents <- read.csv("US_Accidents_June20.csv")
 
 US_Accidents <- as_tibble(US_Accidents)
 
