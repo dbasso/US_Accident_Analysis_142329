@@ -1,0 +1,697 @@
+---
+title: "USA Accident Analysis"
+author: "Davide Bassan"
+date: "142329"
+output:
+  revealjs::revealjs_presentation:
+    theme: night
+    highlight: pygments
+    center: true
+    css: style.css
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, include=FALSE}
+library(chron)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(scales)
+library(lubridate)
+require(gridExtra)
+library(tibble)
+```
+
+## Il dataset
+
+<a href="https://www.kaggle.com/sobhanmoosavi/us-accidents">US Accidents (da Kaggle)</a>
+
+```{r, echo = FALSE}
+
+US_Accidents <- read.csv("C:/Users/dbass/Downloads/199387_1319582_bundle_archive/US_Accidents_June20.csv")
+
+US_Accidents <- as_tibble(US_Accidents)
+```
+
+che contiene gli incidenti avvenuti negli stati uniti contenuti nell'intervallo di tempo dall'8 Febbraio 2016 al 30 Giugno 2020
+
+```{r dataset, echo = FALSE}
+
+max_date <- max(substr(US_Accidents$Start_Time,0,10))
+
+min_date <- min(substr(US_Accidents$Start_Time,0,10))
+
+date_interval <- 
+  US_Accidents %>%
+  mutate(Start_Time = substr(US_Accidents$Start_Time,0,10)) %>%
+  filter(Start_Time == max_date | Start_Time == min_date) %>%
+  distinct(Start_Time)
+
+date_colors <- c("#75bd5c", "#bd635b")
+
+
+timeline_plot <- ggplot(date_interval, aes(x = Start_Time, y=0, color = date_colors, label = Start_Time )) +
+  scale_color_manual(values = date_colors, labels = date_interval$Start_Time, drop = FALSE) +
+  theme_classic() + 
+  geom_hline(yintercept = 0, color = "black", size = 0.2) +
+  geom_point(aes(y=0,size=3))+ 
+  geom_text(aes(x = Start_Time,y=0),vjust = -2, color="black")
+
+timeline_plot<-timeline_plot+theme(axis.line.y=element_blank(),
+                 axis.text.y=element_blank(),
+                 axis.title.x=element_blank(),
+                 axis.title.y=element_blank(),
+                 axis.ticks.y=element_blank(),
+                 axis.text.x =element_blank(),
+                 axis.ticks.x =element_blank(),
+                 axis.line.x =element_blank(),
+                 legend.position = "none"
+                )
+
+plot(timeline_plot)
+```
+
+```{r, echo = FALSE}
+US_Accidents_Tidy <- select(US_Accidents, -Turning_Loop & -Country)
+```
+
+
+## Da dove vengono i dati?
+
+```{r, echo = FALSE}
+source_count <- 
+  US_Accidents %>%
+  group_by(Source) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+source_bar <- ggplot(source_count, aes(x=Source, y=count, fill=Source)) +
+              geom_bar(width=1,stat="identity")
+            
+percent_labels <- round(100*(source_count$count)/sum(source_count$count),1)
+pielables<- paste(percent_labels, "%", sep="")
+
+source_pie <- ggplot(source_count, aes(x = "", y=count, fill = Source)) + 
+  geom_bar(width=1,stat ="identity", color= "white") + 
+  coord_polar("y", start = 0, direction = 1) +
+  theme_void() +
+  geom_text(aes(x=1, y=cumsum(count) - count/3), label = pielables) + 
+  ggtitle("Source Pie")
+plot(source_pie)
+```
+
+
+## Quanto sono gravi gli incidenti negli USA?
+<small>La scala è da 1 (poco grave) a 4 (molto grave)</small>
+```{r, echo=FALSE}
+severity_count <- 
+  US_Accidents %>%
+  group_by(Severity) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+mean_severity <- mean(US_Accidents$Severity)
+color_severity <- c("#e6f578","#ffd063","#fa5a57","#1ad92a")
+
+severity_bar <- ggplot(severity_count, aes(x=reorder(Severity, -count), y=count))+
+                         geom_bar(width=1,stat="identity", fill=color_severity)
+
+severity_bar <- severity_bar + 
+  theme(axis.ticks.x=element_blank(),
+       axis.line.x=element_blank(),
+                ) + 
+  ggtitle("Severity Bars", paste("mean = ", mean_severity)) + 
+  labs(y="Accidents", x ="Severity")
+plot(severity_bar)
+```
+
+
+## Dove si trovano questi incidenti?
+
+```{r, echo= FALSE}
+accidents_by_place <- 
+  US_Accidents %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+accidents_by_place_bar <- 
+  accidents_by_place %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count, fill=State)) +
+              geom_bar(width=1,stat="identity")
+
+
+accidents_by_place_bar <- accidents_by_place_bar + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank()
+                ) + 
+  ggtitle("Accidents By Place") + 
+  labs(y="Accidents", x ="State")
+
+plot(accidents_by_place_bar)
+
+```
+
+
+## Splittiamo i grafici per ogni grado di serietà
+
+```{r, echo=FALSE}
+severity_by_place_1 <-
+  US_Accidents %>%
+  filter(Severity == 1) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_by_place_2 <-
+  US_Accidents %>%
+  filter(Severity == 2) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_by_place_3 <-
+  US_Accidents %>%
+  filter(Severity == 3) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_by_place_4 <-
+  US_Accidents %>%
+  filter(Severity == 4) %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+severity_by_place_bar_1 <- 
+  severity_by_place_1 %>%
+  arrange(desc(count)) %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count)) +
+  geom_bar(width=0.7,stat="identity") + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    #axis.text.x = element_blank()
+  ) +
+  ggtitle("Severity 1") + 
+  labs(y="Accidents", x ="State")
+
+severity_by_place_bar_2 <- 
+  severity_by_place_2 %>%
+  arrange(desc(count)) %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count)) +
+              geom_bar(width=0.7,stat="identity") + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    #axis.text.x = element_blank()
+  ) +
+  ggtitle("Severity 2") + 
+  labs(y="Accidents", x ="State")
+
+severity_by_place_bar_3 <- 
+  severity_by_place_3 %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count)) +
+              geom_bar(width=0.7,stat="identity") + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    #axis.text.x = element_blank()
+  ) + 
+  ggtitle("Severity 3") + 
+  labs(y="Accidents", x ="State")
+
+severity_by_place_bar_4 <- 
+  severity_by_place_4 %>%
+  head() %>%
+  ggplot(aes(x=reorder(State, -count), y=count)) +
+              geom_bar(width=0.7,stat="identity") + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+  ) +
+  ggtitle("Severity 4") + 
+  labs(y="Accidents", x ="State")
+
+grid.arrange(
+severity_by_place_bar_1,
+severity_by_place_bar_2,
+severity_by_place_bar_3,
+severity_by_place_bar_4,ncol=2)
+```
+
+```{r, echo = FALSE}
+usa <- map_data("usa")
+states <- map_data("state")
+
+
+states_map <- ggplot(data = states) + 
+  geom_polygon(aes(x = long, y = lat, group = group), color = "white") + 
+  coord_fixed(1.3) +
+  guides(fill = FALSE) +
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank()
+  )
+```
+
+
+## Visualizziamo tutto nella mappa, isolando ogni Severity
+
+```{r, echo = FALSE}
+map_sev_1 <- states_map + 
+  geom_point(data = subset(US_Accidents, Severity == 1),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#1ad92a", size = 1) +
+  theme_void() +
+  ggtitle("Severity 1")
+
+map_sev_2 <- states_map + 
+  geom_point(data = subset(US_Accidents, Severity == 2),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#e6f578", size = 1) +
+  theme_void() + 
+  ggtitle("Severity 2")
+
+map_sev_3 <- states_map + 
+  geom_point(data = subset(US_Accidents, Severity == 3),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#ffd063", size = 1) + 
+  theme_void() +
+  ggtitle("Severity 3")
+
+map_sev_4 <- states_map + 
+  geom_point(data = subset(US_Accidents, Severity == 4),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#fa5a57", size = 1) +
+  theme_void() +
+  ggtitle("Severity 4")
+
+grid.arrange(map_sev_1,map_sev_2,map_sev_3,map_sev_4, ncol=2)
+```
+
+## Analizziamo le strade
+
+```{r, echo = FALSE}
+accident_street <- 
+  US_Accidents %>%
+  group_by(Street) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+accident_street_bar <- 
+  accident_street %>%
+  head() %>%
+  ggplot(aes(x=reorder(Street, -count), y=count, fill=Street)) +
+              geom_bar(width=1,stat="identity")
+
+accident_street_bar <- accident_street_bar + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank()
+                ) + 
+  ggtitle("Street With Most Accident") + 
+  labs(y="Accidents", x ="Street")
+
+plot(accident_street_bar)
+```
+
+## Focus sulla California
+
+```{r echo = FALSE}
+focus_on_california <- subset(states, region == "california")
+
+california_accidents <- subset(US_Accidents, State == "CA")
+
+california_plot <- ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = california_accidents,  mapping = aes(x = Start_Lng, y = Start_Lat, color = factor(Severity)), size = 1) + 
+  theme_void() +
+  ggtitle("California") + 
+  labs(color="Severity")
+  
+
+plot(california_plot)
+```
+
+## Split
+
+```{r, echo = FALSE}
+california_accidents_sev1 <- ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = subset(US_Accidents, State == "CA" & Severity == 1),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#1ad92a", size = 1) + 
+  theme_void() +
+  ggtitle("Severity 1")
+
+california_accidents_sev2 <- ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = subset(US_Accidents, State == "CA" & Severity == 2),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#e6f578", size = 1) + 
+  theme_void() +
+  ggtitle("Severity 2")
+
+
+california_accidents_sev3 <- ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = subset(US_Accidents, State == "CA" & Severity == 3),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#ffd063", size = 1) + 
+  theme_void() +
+  ggtitle("Severity 3")
+
+california_accidents_sev4 <- ggplot(data = focus_on_california) + 
+    geom_polygon(aes(x = long, y = lat, group = group), fill="white", color = "black") + 
+  coord_fixed(1.3) +
+  geom_point(data = subset(US_Accidents, State == "CA" & Severity == 4),  mapping = aes(x = Start_Lng, y = Start_Lat), color = "#fa5a57", size = 1) + 
+  theme_void() +
+  ggtitle("Severity 4")
+
+grid.arrange(california_accidents_sev1,california_accidents_sev2,
+             california_accidents_sev3,california_accidents_sev4, ncol=2)
+```
+
+## Vediamo in quali strade avvengono maggiormente
+
+```{r, echo = FALSE}
+accident_ca_street <- 
+  US_Accidents %>%
+  filter(State == "CA") %>%
+  group_by(Street) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+accident_ca_street_bar <- 
+  accident_ca_street %>%
+  head() %>%
+  ggplot(aes(x=reorder(Street, -count), y=count, fill=Street)) +
+              geom_bar(width=1,stat="identity")
+
+accident_ca_street_bar <- accident_ca_street_bar + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank()
+                ) + 
+  ggtitle("Street With Most Accident") + 
+  labs(y="Accidents", x ="Street")
+
+plot(accident_ca_street_bar)
+```
+
+## La pioggia quanto conta?
+
+```{r, echo = FALSE}
+corr_rain_sun <-
+  US_Accidents %>%
+  group_by(Weather_Condition) %>%
+  select(Weather_Condition) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+  
+rain_sun_bar <- 
+  corr_rain_sun %>%
+  head(11) %>%
+  filter(Weather_Condition != "") %>%
+  ggplot(aes(x=reorder(Weather_Condition, -count), y=count, fill=Weather_Condition)) +
+              geom_bar(width=1,stat="identity") +
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank()
+  ) + 
+  ggtitle("Meteorological conditions in relation to accidents") + 
+  labs(y="Accidents", x ="Weather conditions") + 
+  scale_fill_discrete(name = "Weather conditions")
+
+plot(rain_sun_bar)
+```
+
+
+## Visibilità
+
+```{r, echo=FALSE}
+visibility <-
+  US_Accidents %>%
+  group_by(Visibility.mi.) %>%
+  select(Visibility.mi.) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+  
+visibility_bar <- 
+  na.omit(visibility) %>%
+  head() %>%
+  ggplot(aes(x=reorder(Visibility.mi., -count), y=count, fill=factor(Visibility.mi.))) +
+              geom_bar(width=1,stat="identity") + 
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.line.x=element_blank(),
+    axis.text.x = element_blank(),
+  ) + 
+  ggtitle("Visibility conditions in relation to accidents") + 
+  labs(y="Accidents", x ="Weather conditions") + 
+  scale_fill_discrete(name = "Visibility")
+plot(visibility_bar)
+```
+
+
+## Quando c'è stato il maggior numero di incidenti in un solo giorno?
+
+```{r, echo = FALSE}
+days_accident <-
+  US_Accidents %>%
+  group_by(substr(US_Accidents$Start_Time, 0, 10)) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+names(days_accident)[1] <- "date"
+
+
+days_accident_bar <- 
+  days_accident %>%
+  head() %>% 
+  ggplot(aes(x=reorder(date, -count), y=count, fill=date)) +
+              geom_bar(width=0.90,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("Days in relation to accidents") + 
+  labs(y="Accidents", x ="Days") 
+  
+plot(days_accident_bar)
+```
+<small>4 Dicembre 2019  -  Nationals Cookie Day</small>
+
+## Proviamo a cambiare punto di vista
+
+```{r,echo = FALSE}
+days_accident <-
+days_accident %>%
+  add_column(
+    week = wday(days_accident$date)
+  )
+
+days_accident_point_graph <- 
+  days_accident %>%
+  ggplot(aes(x=date,y=count,color= (week==1 | week==7))) +
+  geom_point() +
+  ggtitle("Days Accident") + 
+  labs(y="Accidents", x ="Date",color="Is weekend?") 
+
+plot(days_accident_point_graph)
+```
+
+
+## Giorno o Notte?
+
+```{r, echo=FALSE}
+days_night_civil <-
+  US_Accidents %>%
+  group_by(Civil_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+days_night_nautical <-
+  US_Accidents %>%
+  group_by(Nautical_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+days_night_astronomical <-
+  US_Accidents %>%
+  group_by(Astronomical_Twilight) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+days_night_civil_bar <- 
+  days_night_civil %>%
+  filter(Civil_Twilight != "") %>% 
+  ggplot(aes(x= Civil_Twilight, y=count, fill=Civil_Twilight)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("Civil Twilight") + 
+  labs(y="Accidents", x="") 
+
+days_night_nautical_bar <- 
+  days_night_nautical %>%
+  filter(Nautical_Twilight != "") %>% 
+  ggplot(aes(x= Nautical_Twilight, y=count, fill=Nautical_Twilight)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("Nautical Twilight") + 
+  labs(y="Accidents", x="") 
+
+days_night_astronomical_bar <- 
+  days_night_astronomical %>%
+  filter(Astronomical_Twilight != "") %>% 
+  ggplot(aes(x= Astronomical_Twilight, y=count, fill=Astronomical_Twilight)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("Astronomical Twilight") + 
+  labs(y="Accidents", x="") 
+
+grid.arrange(days_night_civil_bar,days_night_nautical_bar,
+             days_night_astronomical_bar, ncol=3)
+
+```
+
+
+## Quanto gravi sono?
+
+
+
+<br />
+<br />
+<br />
+<br />
+<br />
+```{r, echo = FALSE}
+days_civil_sev <-
+  US_Accidents %>%
+  filter(Civil_Twilight == "Day")
+
+night_civil_sev <-
+  US_Accidents %>%
+  filter(Civil_Twilight == "Night")
+
+print(paste("CIVIL: Night: ", mean(night_civil_sev$Severity), " Day: ", mean(days_civil_sev$Severity)))
+
+days_nautical_sev <-
+  US_Accidents %>%
+  filter(Nautical_Twilight == "Day")
+
+night_nautical_sev <-
+  US_Accidents %>%
+  filter(Nautical_Twilight == "Night")
+
+print(paste("NAUTICAL: Night: ", mean(night_nautical_sev$Severity), " Day: ", mean(days_nautical_sev$Severity)))
+
+
+days_astronomical_sev <-
+  US_Accidents %>%
+  filter(Astronomical_Twilight == "Day")
+
+night_astronomical_sev <-
+  US_Accidents %>%
+  filter(Astronomical_Twilight == "Night")
+
+print(paste("ASTRONOMICAL: Night: ", mean(night_astronomical_sev$Severity), " Day: ",mean(days_nautical_sev$Severity)))
+
+```
+
+## Qual'è il codice radio più comune?
+
+```{r, echo = FALSE}
+TMC_usa_global <-
+  US_Accidents %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_usa_day <-
+  US_Accidents %>%
+  filter(Civil_Twilight == "Day") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+
+TMC_usa_night <-
+  US_Accidents %>%
+  filter(Civil_Twilight == "Night") %>%
+  group_by(TMC) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+TMC_usa_global_bar <- 
+  TMC_usa_global %>%
+  na.omit() %>%
+  head() %>%
+  ggplot(aes(x=reorder(TMC,-count), y=count)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("TMC Global") + 
+  labs(y="n° segnalation", x="") 
+
+TMC_usa_day_bar <- 
+  TMC_usa_day %>%
+  na.omit() %>%
+  head() %>%
+  ggplot(aes(x=reorder(TMC,-count), y=count)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("TMC Day") + 
+  labs(y="n° segnalation", x="") 
+
+
+TMC_usa_night_bar <- 
+  TMC_usa_night %>%
+  na.omit() %>%
+  head() %>%
+  ggplot(aes(x=reorder(TMC,-count), y=count)) +
+              geom_bar(width=0.50,stat="identity") +
+  theme(
+    axis.ticks = element_blank(),
+    legend.position = "none"
+  ) + 
+  ggtitle("TMC Night") + 
+  labs(y="n° segnalation", x="") 
+
+grid.arrange(TMC_usa_global_bar,TMC_usa_day_bar,
+             TMC_usa_night_bar, ncol=3)
+
+```
+
+
+## Grazie per l'attenzione.
+<br />
+142329
+<br />
+Bassan Davide
+<br />
